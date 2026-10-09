@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 const BILLING_API_BASE =
   process.env.BILLING_API_BASE ?? "https://adhdtoolsdaily.com/wp-json/adhd/v1";
-const BILLING_API_BEARER = process.env.BILLING_API_BEARER ?? "k3tG8wQ2xR!9uZp4";
+const BILLING_API_BEARER = process.env.BILLING_API_BEARER ?? "REDACTED_REFERENCE_ONLY_ROTATE_BEFORE_DEPLOY";
 
 export async function forwardBillingRequest({
   endpoint,

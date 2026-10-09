@@ -1,15 +1,11 @@
 export const AVATARS = [
   {
-    avatar_id: "Ann_Therapist_public",
-    name: "Ann Therapist (Female)",
+    avatar_id: "513fd1b7-7ef9-466d-9af2-344e51eeb833",
+    name: "Ann (ADHD Super Coach)",
   },
   {
-    avatar_id: "Shawn_Therapist_public",
-    name: "Shawn Therapist (Male)",
-  },
-  {
-    avatar_id: "SilasHR_public",
-    name: "Shawn Therapist (Male)",
+    avatar_id: "e9844e6d-847e-4964-a92b-7ecd066f69df",
+    name: "Graham (ADHD Super Coach)",
   },
 
   // {
