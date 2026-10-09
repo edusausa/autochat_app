@@ -1,4 +1,4 @@
-import StreamingAvatarCompat, {
+import StreamingAvatar, {
   ConnectionQuality,
   StartAvatarRequest,
   StreamingEvents,
@@ -11,9 +11,6 @@ import {
 } from "./context";
 import { useVoiceChat } from "./useVoiceChat";
 import { useMessageHistory } from "./useMessageHistory";
-
-type AnyHandler = (payload: { detail?: unknown }) => void;
-const asHandler = (h: unknown) => h as AnyHandler;
 
 export const useStreamingAvatarSession = () => {
   const {
@@ -38,7 +35,7 @@ export const useStreamingAvatarSession = () => {
 
   const init = useCallback(
     (token: string) => {
-      avatarRef.current = new StreamingAvatarCompat({
+      avatarRef.current = new StreamingAvatar({
         token,
         basePath: basePath,
       });
@@ -57,8 +54,8 @@ export const useStreamingAvatarSession = () => {
   );
 
   const stop = useCallback(async () => {
-    avatarRef.current?.off(StreamingEvents.STREAM_READY, asHandler(handleStream));
-    avatarRef.current?.off(StreamingEvents.STREAM_DISCONNECTED, asHandler(stop));
+    avatarRef.current?.off(StreamingEvents.STREAM_READY, handleStream);
+    avatarRef.current?.off(StreamingEvents.STREAM_DISCONNECTED, stop);
     clearMessages();
     stopVoiceChat();
     setIsListening(false);
@@ -97,41 +94,39 @@ export const useStreamingAvatarSession = () => {
       }
 
       setSessionState(StreamingAvatarSessionState.CONNECTING);
-      avatarRef.current.on(StreamingEvents.STREAM_READY, asHandler(handleStream));
-      avatarRef.current.on(StreamingEvents.STREAM_DISCONNECTED, asHandler(stop));
+      avatarRef.current.on(StreamingEvents.STREAM_READY, handleStream);
+      avatarRef.current.on(StreamingEvents.STREAM_DISCONNECTED, stop);
       avatarRef.current.on(
         StreamingEvents.CONNECTION_QUALITY_CHANGED,
-        asHandler(({ detail }: { detail?: unknown }) => setConnectionQuality((detail ?? 'unknown') as ConnectionQuality)),
+        ({ detail }: { detail: ConnectionQuality }) =>
+          setConnectionQuality(detail),
       );
-      avatarRef.current.on(StreamingEvents.USER_START, asHandler(() => {
+      avatarRef.current.on(StreamingEvents.USER_START, () => {
         setIsUserTalking(true);
-      }));
-      avatarRef.current.on(StreamingEvents.USER_STOP, asHandler(() => {
+      });
+      avatarRef.current.on(StreamingEvents.USER_STOP, () => {
         setIsUserTalking(false);
-      }));
-      avatarRef.current.on(StreamingEvents.AVATAR_START_TALKING, asHandler(() => {
+      });
+      avatarRef.current.on(StreamingEvents.AVATAR_START_TALKING, () => {
         setIsAvatarTalking(true);
-      }));
-      avatarRef.current.on(StreamingEvents.AVATAR_STOP_TALKING, asHandler(() => {
+      });
+      avatarRef.current.on(StreamingEvents.AVATAR_STOP_TALKING, () => {
         setIsAvatarTalking(false);
-      }));
+      });
       avatarRef.current.on(
         StreamingEvents.USER_TALKING_MESSAGE,
-        asHandler(handleUserTalkingMessage),
+        handleUserTalkingMessage,
       );
       avatarRef.current.on(
         StreamingEvents.AVATAR_TALKING_MESSAGE,
-        asHandler(handleStreamingTalkingMessage),
+        handleStreamingTalkingMessage,
       );
-      avatarRef.current.on(StreamingEvents.USER_END_MESSAGE, asHandler(handleEndMessage));
+      avatarRef.current.on(StreamingEvents.USER_END_MESSAGE, handleEndMessage);
       avatarRef.current.on(
         StreamingEvents.AVATAR_END_MESSAGE,
-        asHandler(handleEndMessage),
+        handleEndMessage,
       );
 
-      // LiveAvatar: avatar selection happens at token mint time (server route).
-      // Forward the requested avatar id through the token fetch when this
-      // instance has not been initialized yet.
       await avatarRef.current.createStartAvatar(config);
 
       return avatarRef.current;

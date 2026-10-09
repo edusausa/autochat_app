@@ -37,12 +37,12 @@ export const AvatarConfig: React.FC<AvatarConfigProps> = ({
   ) => {
     onConfigChange({ ...config, [key]: value });
   };
-
+  
   // Function to update avatar (knowledgeBase will be generated dynamically at session start)
   const changeAvatar = (avatarName: string) => {
     onConfigChange({ ...config, avatarName, knowledgeId: undefined });
   };
-
+  
   const [showMore, setShowMore] = useState<boolean>(false);
 
   return (
@@ -59,24 +59,26 @@ export const AvatarConfig: React.FC<AvatarConfigProps> = ({
       <Field label="Avatar">
         <div className="flex gap-2 w-full">
           <button
-            className={`flex-1 px-4 py-3 text-sm font-semibold transition-all duration-200 ${config.avatarName === "513fd1b7-7ef9-466d-9af2-344e51eeb833"
+            className={`flex-1 px-4 py-3 text-sm font-semibold transition-all duration-200 ${
+              config.avatarName === "Ann_Therapist_public"
                 ? "text-white shadow-md hover:shadow-lg hover:bg-[#4a6b05]"
                 : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
-              }`}
-            style={config.avatarName === "513fd1b7-7ef9-466d-9af2-344e51eeb833" ? { backgroundColor: '#5C8607' } : {}}
-            onClick={() => changeAvatar("513fd1b7-7ef9-466d-9af2-344e51eeb833")}
+            }`}
+            style={config.avatarName === "Ann_Therapist_public" ? { backgroundColor: '#5C8607' } : {}}
+            onClick={() => changeAvatar("Ann_Therapist_public")}
           >
-            Ann (ADHD Super Coach)
+            Ann Therapist (Female)
           </button>
           <button
-            className={`flex-1 px-4 py-3 text-sm font-semibold transition-all duration-200 ${config.avatarName === "e9844e6d-847e-4964-a92b-7ecd066f69df"
+            className={`flex-1 px-4 py-3 text-sm font-semibold transition-all duration-200 ${
+              config.avatarName === "Graham_Chair_Sitting_public"
                 ? "text-white shadow-md hover:shadow-lg hover:bg-[#4a6b05]"
                 : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
-              }`}
-            style={config.avatarName === "e9844e6d-847e-4964-a92b-7ecd066f69df" ? { backgroundColor: '#5C8607' } : {}}
-            onClick={() => changeAvatar("e9844e6d-847e-4964-a92b-7ecd066f69df")}
+            }`}
+            style={config.avatarName === "Graham_Chair_Sitting_public" ? { backgroundColor: '#5C8607' } : {}}
+            onClick={() => changeAvatar("Graham_Chair_Sitting_public")}
           >
-            Graham (ADHD Super Coach)
+            Graham Therapist (Male)
           </button>
         </div>
       </Field>
@@ -93,14 +95,15 @@ export const AvatarConfig: React.FC<AvatarConfigProps> = ({
           onSelect={(option) => onChange("language", option.value)}
         />
       </Field>
-
+      
       {showStartButton && onStartSession && (
         <div className="flex flex-row gap-4 justify-center mt-2">
-          <Button
+          <Button 
             onClick={onStartSession}
             disabled={isStarting}
-            className={`transition-all duration-200 transform active:scale-95 hover:scale-105 ${isStarting ? 'opacity-75 cursor-not-allowed' : 'hover:shadow-lg'
-              }`}
+            className={`transition-all duration-200 transform active:scale-95 hover:scale-105 ${
+              isStarting ? 'opacity-75 cursor-not-allowed' : 'hover:shadow-lg'
+            }`}
           >
             {isStarting ? (
               <div className="flex items-center gap-2">
@@ -113,8 +116,8 @@ export const AvatarConfig: React.FC<AvatarConfigProps> = ({
           </Button>
         </div>
       )}
-
-      {/*
+      
+       {/*
       <Field label="Avatar Quality">
         <Select
           isSelected={(option) => option === config.quality}
@@ -151,7 +154,7 @@ export const AvatarConfig: React.FC<AvatarConfigProps> = ({
             />
           </Field>
           */}
-
+          
           {/* 
           <Field label="ElevenLabs Model">
             <Select

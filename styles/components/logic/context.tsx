@@ -1,4 +1,4 @@
-import StreamingAvatarCompat, {
+import StreamingAvatar, {
   ConnectionQuality,
   StreamingEvents,
   StreamingTalkingMessageEvent,
@@ -26,7 +26,7 @@ export interface Message {
 }
 
 type StreamingAvatarContextProps = {
-  avatarRef: React.MutableRefObject<StreamingAvatarCompat | null>;
+  avatarRef: React.MutableRefObject<StreamingAvatar | null>;
   basePath?: string;
 
   isMuted: boolean;
@@ -252,7 +252,7 @@ const useStreamingAvatarAssistantIntegration = ({
   sessionState,
   messages,
 }: {
-  avatarRef: React.MutableRefObject<StreamingAvatarCompat | null>;
+  avatarRef: React.MutableRefObject<StreamingAvatar | null>;
   sessionState: StreamingAvatarSessionState;
   messages: Message[];
 }) => {
@@ -399,7 +399,7 @@ export const StreamingAvatarProvider = ({
   children: React.ReactNode;
   basePath?: string;
 }) => {
-  const avatarRef = React.useRef<StreamingAvatarCompat>(null);
+  const avatarRef = React.useRef<StreamingAvatar>(null);
   const voiceChatState = useStreamingAvatarVoiceChatState();
   const sessionState = useStreamingAvatarSessionState();
   const messageState = useStreamingAvatarMessageState();

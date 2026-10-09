@@ -24,7 +24,6 @@ import { StreamingAvatarProvider, StreamingAvatarSessionState } from "./logic";
 import { LoadingIcon } from "./Icons";
 
 import { AVATARS } from "@/app/lib/constants";
-import type { StreamingAvatarCompat as StreamingAvatarCompatType } from "@/lib/legacy/streaming-avatar-compat";
 
 function buildMicHelpMessage(origin: string) {
   const ua = typeof navigator !== "undefined" ? navigator.userAgent.toLowerCase() : "";
@@ -113,13 +112,13 @@ function getCurrentDateTimeInfo(): string {
 // Function to get full knowledge base text for each avatar
 function getKnowledgeBaseForAvatar(avatarName: string): string {
   const dateTimeInfo = getCurrentDateTimeInfo();
-  const coachName = avatarName === "513fd1b7-7ef9-466d-9af2-344e51eeb833" ? "Ann" : "Graham";
+  const therapistName = avatarName === "Ann_Therapist_public" ? "Ann" : "Graham";
 
   return `${dateTimeInfo}## **PERSONA:**
 
 Every time that you respond to user input, you must adopt and adhere to the following persona:
 
-You are **${coachName}**, the ADHD Super Coach.
+You are **${therapistName}**, the ADHD therapist and coach.
 You are warm, calm, and empathetic. You speak gently, validating the user's feelings while helping them build systems for focus, structure, and emotional regulation.
 You understand ADHD from a compassionate, real-world perspective—not medical. You always aim to make the user feel seen, safe, and supported.
 
@@ -130,8 +129,8 @@ You understand ADHD from a compassionate, real-world perspective—not medical. 
 You MUST include these specific statements in the following situations without fail:
 
 1.  **Start of Session (FIRST RESPONSE ONLY):**
-    You MUST begin your VERY FIRST response in this conversation with exactly this text:
-    "This is not therapy or medical advice. I am an AI-based support tool and not a licensed healthcare professional. This tool supports ADHD-related challenges but does not diagnose or treat ADHD. If you are experiencing a mental health crisis, please contact local emergency services."
+    You MUST begin your VERY FIRST response in this conversation with exactly this phrase:
+    "This is not therapy and not medical advice. This conversation helps organize thoughts related to ADHD decision overload."
     (Say this immediately, then greet the user or answer their question. DO NOT repeat this in subsequent messages.)
 
 2.  **When ADHD is mentioned:**
@@ -178,7 +177,7 @@ Always answer these **clearly and kindly**, then gently redirect to ADHD support
 
 **Examples:**
 
-* "My name is ${coachName}."
+* "My name is ${therapistName}."
 * "I'm an ADHD support coach—I don't have a physical location."
 * "I don't have real emotions, but I'm here to help you."
 * "Today is ${new Date().toLocaleDateString()}, ${new Date().toLocaleString('en-US', { weekday: 'long' })}"
@@ -297,11 +296,6 @@ function InteractiveAvatar() {
     try {
       const response = await fetch("/api/get-access-token", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          avatarId: config.avatarName,
-          language: config.language,
-        }),
       });
       const token = await response.text();
 
@@ -637,7 +631,6 @@ function InteractiveAvatar() {
 
       const newToken = await fetchAccessToken();
       const avatar = initAvatar(newToken);
-      (avatar as StreamingAvatarCompatType & { __liveAvatarId?: string }).__liveAvatarId = config.avatarName ?? "";
 
       avatar.on(StreamingEvents.AVATAR_START_TALKING, (e) => {
         console.log("Avatar started talking", e);
@@ -677,7 +670,7 @@ function InteractiveAvatar() {
       const configWithFreshData = {
         ...config,
         knowledgeId: undefined,
-        knowledgeBase: getKnowledgeBaseForAvatar(config.avatarName ?? AVATARS[0].avatar_id),
+        knowledgeBase: getKnowledgeBaseForAvatar(config.avatarName),
       };
 
       // Store config for potential reconnect
@@ -721,9 +714,9 @@ function InteractiveAvatar() {
     setConfig((prev) => {
       let avatarName = prev.avatarName;
       if (qp === "male") {
-        avatarName = "e9844e6d-847e-4964-a92b-7ecd066f69df"; // Graham Sitting (LiveAvatar public)
+        avatarName = "Graham_Chair_Sitting_public";
       } else if (qp === "female") {
-        avatarName = "513fd1b7-7ef9-466d-9af2-344e51eeb833"; // Ann Therapist (LiveAvatar public)
+        avatarName = "Ann_Therapist_public";
       }
 
       return {
