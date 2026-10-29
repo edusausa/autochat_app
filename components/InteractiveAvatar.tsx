@@ -290,6 +290,7 @@ function InteractiveAvatar() {
   const clientSessionIdRef = useRef(createClientSessionId());
   const billingHeartbeatInFlightRef = useRef(false);
   const billingEndPromiseRef = useRef<Promise<void> | null>(null);
+  const billingSessionConnectedRef = useRef(false);
   const queryToken = searchParams?.get("token") ?? null;
 
   // Callback to ensure video element is properly attached
@@ -933,22 +934,38 @@ function InteractiveAvatar() {
   }, [sessionState]);
 
   useEffect(() => {
-    if (sessionState !== StreamingAvatarSessionState.CONNECTED) {
-      void endBillingSession();
-      stopMinutesPolling();
-      setMinutesRemaining(null);
-      setSecondsRemaining(null);
-      minutesRemainingRef.current = null;
-      setTotalAllocatedMinutes(null);
-      if (secondsCountdownRef.current) {
-        clearInterval(secondsCountdownRef.current);
-        secondsCountdownRef.current = null;
-      }
-      if (!timeExpired) {
-        setBillingMessage(null);
-      }
-      hasExpiredRef.current = false;
+    if (sessionState === StreamingAvatarSessionState.CONNECTED) {
+      // The billing session is opened before LiveAvatar finishes connecting.
+      // Keep it alive during the normal INACTIVE -> CONNECTING -> CONNECTED
+      // transition so the first heartbeat can account for real usage.
+      billingSessionConnectedRef.current = true;
+      return;
     }
+
+    if (sessionState !== StreamingAvatarSessionState.INACTIVE) {
+      return;
+    }
+
+    const hadConnectedBillingSession = billingSessionConnectedRef.current;
+    billingSessionConnectedRef.current = false;
+
+    if (hadConnectedBillingSession) {
+      void endBillingSession();
+    }
+
+    stopMinutesPolling();
+    setMinutesRemaining(null);
+    setSecondsRemaining(null);
+    minutesRemainingRef.current = null;
+    setTotalAllocatedMinutes(null);
+    if (secondsCountdownRef.current) {
+      clearInterval(secondsCountdownRef.current);
+      secondsCountdownRef.current = null;
+    }
+    if (!timeExpired) {
+      setBillingMessage(null);
+    }
+    hasExpiredRef.current = false;
   }, [sessionState, stopMinutesPolling, timeExpired]);
 
   const handleBackToLobby = () => {
