@@ -294,6 +294,7 @@ function InteractiveAvatar() {
   const providerReconnectPendingRef = useRef(false);
   const providerReconnectAttemptsRef = useRef(0);
   const intentionalStopRef = useRef(false);
+  const billingSessionConnectedRef = useRef(false);
   const queryToken = searchParams?.get("token") ?? null;
 
   // Callback to ensure video element is properly attached
@@ -974,40 +975,55 @@ function InteractiveAvatar() {
   }, [sessionState]);
 
   useEffect(() => {
-    if (sessionState !== StreamingAvatarSessionState.CONNECTED) {
-      const shouldReconnect =
-        sessionState === StreamingAvatarSessionState.INACTIVE &&
-        providerReconnectPendingRef.current &&
-        !intentionalStopRef.current &&
-        !hasExpiredRef.current &&
-        sessionWasActiveRef.current;
+    if (sessionState === StreamingAvatarSessionState.CONNECTED) {
+      // The billing session is opened before LiveAvatar finishes connecting.
+      // Keep it alive during the normal INACTIVE -> CONNECTING -> CONNECTED
+      // transition so the first heartbeat can account for real usage.
+      billingSessionConnectedRef.current = true;
+      return;
+    }
 
-      if (shouldReconnect) {
-        providerReconnectPendingRef.current = false;
-      }
+    if (sessionState !== StreamingAvatarSessionState.INACTIVE) {
+      return;
+    }
 
+    const hadConnectedBillingSession = billingSessionConnectedRef.current;
+    billingSessionConnectedRef.current = false;
+
+    const shouldReconnect =
+      providerReconnectPendingRef.current &&
+      !intentionalStopRef.current &&
+      !hasExpiredRef.current &&
+      sessionWasActiveRef.current;
+
+    if (shouldReconnect) {
+      providerReconnectPendingRef.current = false;
+    }
+
+    if (hadConnectedBillingSession || shouldReconnect) {
       void endBillingSession();
-      stopMinutesPolling();
-      setMinutesRemaining(null);
-      setSecondsRemaining(null);
-      minutesRemainingRef.current = null;
-      setTotalAllocatedMinutes(null);
-      if (secondsCountdownRef.current) {
-        clearInterval(secondsCountdownRef.current);
-        secondsCountdownRef.current = null;
-      }
-      if (!timeExpired) {
-        setBillingMessage(null);
-      }
-      hasExpiredRef.current = false;
+    }
 
-      if (shouldReconnect) {
-        const reconnectTimer = window.setTimeout(() => {
-          void startSessionV2(true, { autoReconnect: true });
-        }, 350);
+    stopMinutesPolling();
+    setMinutesRemaining(null);
+    setSecondsRemaining(null);
+    minutesRemainingRef.current = null;
+    setTotalAllocatedMinutes(null);
+    if (secondsCountdownRef.current) {
+      clearInterval(secondsCountdownRef.current);
+      secondsCountdownRef.current = null;
+    }
+    if (!timeExpired) {
+      setBillingMessage(null);
+    }
+    hasExpiredRef.current = false;
 
-        return () => window.clearTimeout(reconnectTimer);
-      }
+    if (shouldReconnect) {
+      const reconnectTimer = window.setTimeout(() => {
+        void startSessionV2(true, { autoReconnect: true });
+      }, 350);
+
+      return () => window.clearTimeout(reconnectTimer);
     }
   }, [sessionState, stopMinutesPolling, timeExpired, startSessionV2]);
 
