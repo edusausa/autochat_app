@@ -10,10 +10,11 @@ import { Button } from "../Button";
 interface AvatarVideoProps {
   minutesRemaining?: number | null;
   secondsRemaining?: number | null;
+  onManualStop?: () => void | Promise<void>;
 }
 
 export const AvatarVideo = forwardRef<HTMLVideoElement, AvatarVideoProps>(
-  ({ minutesRemaining, secondsRemaining }, ref) => {
+  ({ minutesRemaining, secondsRemaining, onManualStop }, ref) => {
     const { sessionState, stopAvatar } = useStreamingAvatarSession();
     const { connectionQuality } = useConnectionQuality();
 
@@ -62,7 +63,7 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, AvatarVideoProps>(
         {isLoaded && (
           <Button
             className="absolute top-3 right-3 !p-2 bg-zinc-700 bg-opacity-50 z-10"
-            onClick={stopAvatar}
+            onClick={onManualStop ?? stopAvatar}
           >
             <CloseIcon />
           </Button>

@@ -290,6 +290,10 @@ function InteractiveAvatar() {
   const clientSessionIdRef = useRef(createClientSessionId());
   const billingHeartbeatInFlightRef = useRef(false);
   const billingEndPromiseRef = useRef<Promise<void> | null>(null);
+  const sessionWasActiveRef = useRef(false);
+  const providerReconnectPendingRef = useRef(false);
+  const providerReconnectAttemptsRef = useRef(0);
+  const intentionalStopRef = useRef(false);
   const queryToken = searchParams?.get("token") ?? null;
 
   // Callback to ensure video element is properly attached
@@ -415,6 +419,10 @@ function InteractiveAvatar() {
       return;
     }
     hasExpiredRef.current = true;
+    intentionalStopRef.current = true;
+    sessionWasActiveRef.current = false;
+    setSessionWasActive(false);
+    providerReconnectPendingRef.current = false;
     setTimeExpired(true);
     // Don't set billingMessage - we'll show a single consolidated notification
     stopMinutesPolling();
@@ -638,9 +646,17 @@ function InteractiveAvatar() {
     }
   }, [clientToken, queryToken]);
 
-  const startSessionV2 = useMemoizedFn(async (isVoiceChat: boolean) => {
+  const startSessionV2 = useMemoizedFn(async (
+    isVoiceChat: boolean,
+    options?: { autoReconnect?: boolean },
+  ) => {
+    const isAutoReconnect = options?.autoReconnect === true;
     try {
       setIsStarting(true);
+      intentionalStopRef.current = false;
+      if (!isAutoReconnect) {
+        providerReconnectAttemptsRef.current = 0;
+      }
       setBillingMessage(null);
       setTokenError(null);
       setTimeExpired(false);
@@ -723,6 +739,27 @@ function InteractiveAvatar() {
       });
       avatar.on(StreamingEvents.STREAM_DISCONNECTED, () => {
         console.log("Stream disconnected");
+        const remaining = minutesRemainingRef.current;
+        const canReconnect =
+          !intentionalStopRef.current &&
+          !hasExpiredRef.current &&
+          sessionWasActiveRef.current &&
+          Boolean(billingSessionIdRef.current) &&
+          typeof remaining === "number" &&
+          remaining > 0;
+
+        if (canReconnect) {
+          providerReconnectAttemptsRef.current += 1;
+          if (providerReconnectAttemptsRef.current <= 8) {
+            providerReconnectPendingRef.current = true;
+            console.log(
+              "Provider room ended; reconnecting while purchase time remains",
+              providerReconnectAttemptsRef.current,
+            );
+          } else {
+            console.error("Provider reconnect limit reached.");
+          }
+        }
         // Restore original console.error
         console.error = originalConsoleError;
       });
@@ -771,6 +808,7 @@ function InteractiveAvatar() {
       startMinutesPolling();
 
       // Mark that we had an active session
+      sessionWasActiveRef.current = true;
       setSessionWasActive(true);
       setMicPaused(false);
 
@@ -786,6 +824,9 @@ function InteractiveAvatar() {
   });
 
   useUnmount(() => {
+    intentionalStopRef.current = true;
+    sessionWasActiveRef.current = false;
+    providerReconnectPendingRef.current = false;
     stopMinutesPolling();
     void endBillingSession();
     void stopAvatar();
@@ -934,6 +975,17 @@ function InteractiveAvatar() {
 
   useEffect(() => {
     if (sessionState !== StreamingAvatarSessionState.CONNECTED) {
+      const shouldReconnect =
+        sessionState === StreamingAvatarSessionState.INACTIVE &&
+        providerReconnectPendingRef.current &&
+        !intentionalStopRef.current &&
+        !hasExpiredRef.current &&
+        sessionWasActiveRef.current;
+
+      if (shouldReconnect) {
+        providerReconnectPendingRef.current = false;
+      }
+
       void endBillingSession();
       stopMinutesPolling();
       setMinutesRemaining(null);
@@ -948,10 +1000,29 @@ function InteractiveAvatar() {
         setBillingMessage(null);
       }
       hasExpiredRef.current = false;
+
+      if (shouldReconnect) {
+        const reconnectTimer = window.setTimeout(() => {
+          void startSessionV2(true, { autoReconnect: true });
+        }, 350);
+
+        return () => window.clearTimeout(reconnectTimer);
+      }
     }
-  }, [sessionState, stopMinutesPolling, timeExpired]);
+  }, [sessionState, stopMinutesPolling, timeExpired, startSessionV2]);
+
+  const handleManualStop = useCallback(async () => {
+    intentionalStopRef.current = true;
+    sessionWasActiveRef.current = false;
+    providerReconnectPendingRef.current = false;
+    setSessionWasActive(false);
+    await stopAvatar();
+  }, [stopAvatar]);
 
   const handleBackToLobby = () => {
+    intentionalStopRef.current = true;
+    sessionWasActiveRef.current = false;
+    providerReconnectPendingRef.current = false;
     setMicPaused(false);
     setSessionWasActive(false);
     // Already stopped, just return to lobby
@@ -1053,6 +1124,7 @@ function InteractiveAvatar() {
               ref={setVideoRef}
               minutesRemaining={minutesRemaining}
               secondsRemaining={secondsRemaining}
+              onManualStop={handleManualStop}
             />
           ) : (
             <>
