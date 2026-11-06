@@ -818,7 +818,37 @@ function InteractiveAvatar() {
       }
     } catch (error) {
       console.error("Error starting avatar session:", error);
+      const providerMessage = error instanceof Error ? error.message.trim() : "";
+
+      // A provider failure must return the UI to the lobby. Without this
+      // reset, the SDK can remain in CONNECTING/STARTING and the customer is
+      // left with no actionable error message after the provider rejects the
+      // session (for example, when LiveAvatar credits are exhausted).
+      sessionWasActiveRef.current = false;
+      providerReconnectPendingRef.current = false;
+      billingSessionConnectedRef.current = false;
+      setSessionWasActive(false);
+      setMinutesRemaining(null);
+      setSecondsRemaining(null);
+      minutesRemainingRef.current = null;
+      stopMinutesPolling();
+
+      if (providerMessage.toLowerCase().includes("credit")) {
+        setBillingMessage(
+          "The avatar provider is currently unavailable because its LiveAvatar credits are exhausted. Your purchase token was not reset. Please try again later.",
+        );
+      } else {
+        setBillingMessage(
+          "The avatar provider could not start this session. Please try again later.",
+        );
+      }
+
       await endBillingSession();
+      try {
+        await stopAvatar();
+      } catch (stopError) {
+        console.error("Failed to reset avatar after start failure:", stopError);
+      }
     } finally {
       setIsStarting(false);
     }
