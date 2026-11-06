@@ -818,7 +818,7 @@ function InteractiveAvatar() {
       }
     } catch (error) {
       console.error("Error starting avatar session:", error);
-      await endBillingSession();
+            const providerMessage = error instanceof Error ? error.message.trim() : ""; sessionWasActiveRef.current = false; providerReconnectPendingRef.current = false; billingSessionConnectedRef.current = false; setSessionWasActive(false); setMinutesRemaining(null); setSecondsRemaining(null); minutesRemainingRef.current = null; stopMinutesPolling(); if (providerMessage.toLowerCase().includes("credit")) { setBillingMessage("The avatar provider is currently unavailable because its LiveAvatar credits are exhausted. Your purchase token was not reset. Please try again later."); } else { setBillingMessage("The avatar provider could not start this session. Please try again later."); } await endBillingSession(); try { await stopAvatar(); } catch (stopError) { console.error("Failed to reset avatar after start failure:", stopError); }
     } finally {
       setIsStarting(false);
     }
