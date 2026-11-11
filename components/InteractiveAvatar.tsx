@@ -291,8 +291,9 @@ function InteractiveAvatar() {
   const billingHeartbeatInFlightRef = useRef(false);
   const billingEndPromiseRef = useRef<Promise<void> | null>(null);
   const sessionWasActiveRef = useRef(false);
-  const providerReconnectPendingRef = useRef(false);
-  const providerReconnectAttemptsRef = useRef(0);
+  const providerDisconnectRef = useRef(false);
+  const pageTeardownRequestedRef = useRef(false);
+  const providerSessionIdRef = useRef<string | null>(null);
   const intentionalStopRef = useRef(false);
   const billingSessionConnectedRef = useRef(false);
   const queryToken = searchParams?.get("token") ?? null;
@@ -316,8 +317,6 @@ function InteractiveAvatar() {
   const { state: micState, request: requestMic } = useMicPermission();
   const isStoppingRef = useRef(false);
   const stopCallCountRef = useRef(0);
-  const lastConfigRef = useRef<StartAvatarRequest>(DEFAULT_CONFIG); // Store last config for reconnect
-
   useEffect(() => {
     if (queryToken && queryToken !== clientToken) {
       setClientToken(queryToken);
@@ -358,9 +357,12 @@ function InteractiveAvatar() {
     }
 
     const billingSessionId = response.headers.get("X-ADHD-Billing-Session-Id");
-    if (!billingSessionId || !responseText.trim()) {
+    const providerSessionId =
+      response.headers.get("X-LiveAvatar-Session-Id")?.trim() || null;
+    if (!billingSessionId || !providerSessionId || !responseText.trim()) {
       throw new Error("The billing session could not be started.");
     }
+    providerSessionIdRef.current = providerSessionId;
     billingSessionIdRef.current = billingSessionId;
     return responseText.trim();
   }
@@ -382,13 +384,18 @@ function InteractiveAvatar() {
     const request = fetch("/api/billing/session/end", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: activeToken, session_id: sessionId }),
+      body: JSON.stringify({
+        token: activeToken,
+        session_id: sessionId,
+        provider_session_id: providerSessionIdRef.current,
+      }),
       keepalive: true,
     })
       .then(() => undefined)
       .catch(() => undefined)
       .finally(() => {
         billingSessionIdRef.current = null;
+        providerSessionIdRef.current = null;
         billingEndPromiseRef.current = null;
       });
 
@@ -423,7 +430,6 @@ function InteractiveAvatar() {
     intentionalStopRef.current = true;
     sessionWasActiveRef.current = false;
     setSessionWasActive(false);
-    providerReconnectPendingRef.current = false;
     setTimeExpired(true);
     // Don't set billingMessage - we'll show a single consolidated notification
     stopMinutesPolling();
@@ -647,17 +653,11 @@ function InteractiveAvatar() {
     }
   }, [clientToken, queryToken]);
 
-  const startSessionV2 = useMemoizedFn(async (
-    isVoiceChat: boolean,
-    options?: { autoReconnect?: boolean },
-  ) => {
-    const isAutoReconnect = options?.autoReconnect === true;
+  const startSessionV2 = useMemoizedFn(async (isVoiceChat: boolean) => {
     try {
       setIsStarting(true);
       intentionalStopRef.current = false;
-      if (!isAutoReconnect) {
-        providerReconnectAttemptsRef.current = 0;
-      }
+      providerDisconnectRef.current = false;
       setBillingMessage(null);
       setTokenError(null);
       setTimeExpired(false);
@@ -740,27 +740,20 @@ function InteractiveAvatar() {
       });
       avatar.on(StreamingEvents.STREAM_DISCONNECTED, () => {
         console.log("Stream disconnected");
-        const remaining = minutesRemainingRef.current;
-        const canReconnect =
-          !intentionalStopRef.current &&
-          !hasExpiredRef.current &&
-          sessionWasActiveRef.current &&
-          Boolean(billingSessionIdRef.current) &&
-          typeof remaining === "number" &&
-          remaining > 0;
-
-        if (canReconnect) {
-          providerReconnectAttemptsRef.current += 1;
-          if (providerReconnectAttemptsRef.current <= 8) {
-            providerReconnectPendingRef.current = true;
-            console.log(
-              "Provider room ended; reconnecting while purchase time remains",
-              providerReconnectAttemptsRef.current,
-            );
-          } else {
-            console.error("Provider reconnect limit reached.");
-          }
+        // A LiveAvatar disconnect can be the normal 300-second provider
+        // limit. Never turn it into a fresh paid session automatically.
+        const expectedStop = intentionalStopRef.current || hasExpiredRef.current;
+        if (!expectedStop && sessionWasActiveRef.current) {
+          providerDisconnectRef.current = true;
+          setBillingMessage(
+            "The LiveAvatar session ended and was not restarted automatically. Please start a new session if you would like to continue.",
+          );
         }
+        intentionalStopRef.current = true;
+        sessionWasActiveRef.current = false;
+        setSessionWasActive(false);
+        stopMinutesPolling();
+        void endBillingSession();
         // Restore original console.error
         console.error = originalConsoleError;
       });
@@ -794,9 +787,6 @@ function InteractiveAvatar() {
         knowledgeBase: getKnowledgeBaseForAvatar(config.avatarName ?? AVATARS[0].avatar_id),
       };
 
-      // Store config for potential reconnect
-      lastConfigRef.current = configWithFreshData;
-
       console.log("🚀 Starting avatar with config:");
       console.log("🎭 Avatar:", configWithFreshData.avatarName);
       console.log("📅 Knowledge Base Preview:", configWithFreshData.knowledgeBase?.substring(0, 150) + "...");
@@ -825,7 +815,6 @@ function InteractiveAvatar() {
       // left with no actionable error message after the provider rejects the
       // session (for example, when LiveAvatar credits are exhausted).
       sessionWasActiveRef.current = false;
-      providerReconnectPendingRef.current = false;
       billingSessionConnectedRef.current = false;
       setSessionWasActive(false);
       setMinutesRemaining(null);
@@ -857,11 +846,33 @@ function InteractiveAvatar() {
   useUnmount(() => {
     intentionalStopRef.current = true;
     sessionWasActiveRef.current = false;
-    providerReconnectPendingRef.current = false;
     stopMinutesPolling();
     void endBillingSession();
     void stopAvatar();
   });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const teardownOnPageExit = () => {
+      if (pageTeardownRequestedRef.current) return;
+      pageTeardownRequestedRef.current = true;
+      intentionalStopRef.current = true;
+      sessionWasActiveRef.current = false;
+      setSessionWasActive(false);
+      stopMinutesPolling();
+      void endBillingSession();
+      void stopAvatar();
+    };
+
+    window.addEventListener("pagehide", teardownOnPageExit);
+    window.addEventListener("beforeunload", teardownOnPageExit);
+
+    return () => {
+      window.removeEventListener("pagehide", teardownOnPageExit);
+      window.removeEventListener("beforeunload", teardownOnPageExit);
+    };
+  }, [endBillingSession, stopAvatar, stopMinutesPolling]);
 
   useEffect(() => {
     // Apply avatar from query param ?avatar=male|female when lobby is visible
@@ -1018,19 +1029,11 @@ function InteractiveAvatar() {
     }
 
     const hadConnectedBillingSession = billingSessionConnectedRef.current;
+    const endedByProvider = providerDisconnectRef.current;
     billingSessionConnectedRef.current = false;
+    providerDisconnectRef.current = false;
 
-    const shouldReconnect =
-      providerReconnectPendingRef.current &&
-      !intentionalStopRef.current &&
-      !hasExpiredRef.current &&
-      sessionWasActiveRef.current;
-
-    if (shouldReconnect) {
-      providerReconnectPendingRef.current = false;
-    }
-
-    if (hadConnectedBillingSession || shouldReconnect) {
+    if (hadConnectedBillingSession) {
       void endBillingSession();
     }
 
@@ -1043,24 +1046,15 @@ function InteractiveAvatar() {
       clearInterval(secondsCountdownRef.current);
       secondsCountdownRef.current = null;
     }
-    if (!timeExpired) {
+    if (!timeExpired && !endedByProvider) {
       setBillingMessage(null);
     }
     hasExpiredRef.current = false;
-
-    if (shouldReconnect) {
-      const reconnectTimer = window.setTimeout(() => {
-        void startSessionV2(true, { autoReconnect: true });
-      }, 350);
-
-      return () => window.clearTimeout(reconnectTimer);
-    }
-  }, [sessionState, stopMinutesPolling, timeExpired, startSessionV2]);
+  }, [sessionState, stopMinutesPolling, timeExpired]);
 
   const handleManualStop = useCallback(async () => {
     intentionalStopRef.current = true;
     sessionWasActiveRef.current = false;
-    providerReconnectPendingRef.current = false;
     setSessionWasActive(false);
     await stopAvatar();
   }, [stopAvatar]);
@@ -1068,7 +1062,6 @@ function InteractiveAvatar() {
   const handleBackToLobby = () => {
     intentionalStopRef.current = true;
     sessionWasActiveRef.current = false;
-    providerReconnectPendingRef.current = false;
     setMicPaused(false);
     setSessionWasActive(false);
     // Already stopped, just return to lobby

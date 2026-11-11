@@ -4,6 +4,7 @@
  */
 import { NextResponse } from "next/server";
 
+import { stopLiveAvatarSession } from "@/lib/liveavatar-session";
 import { billingRequest } from "../billing/utils";
 
 const API_BASE = (
@@ -29,24 +30,6 @@ function safeErrorMessage(data: Record<string, unknown>, fallback: string) {
     : fallback;
 }
 
-async function stopProviderSession(sessionToken: string) {
-  try {
-    const response = await fetch(`${API_BASE}/v1/sessions`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${sessionToken}`,
-      },
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      console.warn("LiveAvatar session cleanup returned a non-success status.");
-    }
-  } catch {
-    console.warn("LiveAvatar session cleanup failed.");
-  }
-}
-
 export async function POST(request: Request) {
   const apiKey = process.env.LIVEAVATAR_API_KEY?.trim();
   if (!apiKey) {
@@ -57,7 +40,7 @@ export async function POST(request: Request) {
   }
 
   let body: RequestBody = {};
-  let providerSessionTokenForCleanup: string | null = null;
+  let providerSessionIdForCleanup: string | null = null;
 
   try {
     const parsed = await request.json();
@@ -168,7 +151,7 @@ export async function POST(request: Request) {
 
     const providerSessionId = tokenData.data?.session_id?.trim();
     const providerSessionToken = tokenData.data?.session_token?.trim();
-    providerSessionTokenForCleanup = providerSessionToken ?? null;
+    providerSessionIdForCleanup = providerSessionId ?? null;
     if (!tokenResponse.ok || !providerSessionId || !providerSessionToken) {
       return NextResponse.json(
         {
@@ -198,7 +181,9 @@ export async function POST(request: Request) {
       typeof billingSessionId !== "string" ||
       !billingSessionId
     ) {
-      await stopProviderSession(providerSessionToken);
+      if (providerSessionId) {
+        await stopLiveAvatarSession(providerSessionId, "SERVER_ERROR");
+      }
       return NextResponse.json(
         { error: billingSession.error ?? "Could not start the billing session." },
         { status: billingSession.status === 409 ? 409 : 502 },
@@ -215,8 +200,8 @@ export async function POST(request: Request) {
       },
     });
   } catch {
-    if (providerSessionTokenForCleanup) {
-      await stopProviderSession(providerSessionTokenForCleanup);
+    if (providerSessionIdForCleanup) {
+      await stopLiveAvatarSession(providerSessionIdForCleanup, "SERVER_ERROR");
     }
 
     return NextResponse.json(

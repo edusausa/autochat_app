@@ -125,7 +125,10 @@ export default class StreamingAvatarCompat {
 
   constructor(options: { token: string; basePath?: string }) {
     this.session = new LiveAvatarSession(options.token, {
-      autoKeepAlive: true,
+      // Keep the provider's default idle timeout active. The application
+      // must never keep a paid session alive after the customer disconnects.
+      // Explicit teardown is handled by stopAvatar() and pagehide cleanup.
+      autoKeepAlive: false,
     });
     this.wireEvents();
   }
